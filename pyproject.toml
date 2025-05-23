@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jirax"
+version = "0.1.0"
+description = "A CLI tool for extracting Jira issues to CSV"
+readme = "README.md"
+authors = [
+    {name = "Vishal Gandhi", email = "igandhivishal@gmail.com"}
+]
+license = {text = "MIT"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "jira==3.5.1",
+    "click==8.1.7",
+    "rich==13.6.0",
+    "toml==0.10.2",
+]
+
+[project.scripts]
+jirax = "jirax:cli"
+
+[project.urls]
+"Homepage" = "https://github.com/yourusername/jirax"
+"Bug Tracker" = "https://github.com/yourusername/jirax/issues"
+
+[tool.setuptools]
+packages = ["jirax"]
+
+[tool.black]
+line-length = 100
+target-version = ["py38"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true

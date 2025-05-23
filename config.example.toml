@@ -1,0 +1,24 @@
+# Jirax Configuration File Example
+# Copy this file to config.toml and fill in your credentials
+
+[jira]
+# Your Jira instance URL (e.g., https://your-company.atlassian.net)
+server = ""
+# Your personal access token (PAT)
+token = ""
+# Your Atlassian email address
+email = ""
+
+[extraction]
+# Default project to extract from if no project is specified
+default_project = ""
+# Default max results to fetch
+max_results = 1000
+# Default output directory for extractions
+output_directory = "./exports"
+
+[display]
+# Show preview before exporting
+preview = true
+# Number of rows to show in preview
+preview_rows = 5
