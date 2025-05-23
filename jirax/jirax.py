@@ -397,6 +397,10 @@ def extract(server, token, project, query, max_results, output_path, preview, ve
     verify_ssl = verify_ssl if verify_ssl is not None else config_data.get('jira', {}).get('verify_ssl', True)
     timeout = timeout or config_data.get('jira', {}).get('timeout', 30)
     
+    # Use default project from config if not provided in command line
+    if not project and not query:
+        project = config_data.get('extraction', {}).get('default_project', '')
+    
     # Handle output path with configured directory
     if not output_path:
         output_dir = config_data.get('extraction', {}).get('output_directory', './exports')
@@ -415,10 +419,6 @@ def extract(server, token, project, query, max_results, output_path, preview, ve
         console.print("[bold red]Error:[/bold red] Jira token is required. Provide via --token or config file.")
         sys.exit(1)
     
-    if not project and not query:
-        console.print("[bold red]Error:[/bold red] Either project or query must be provided.")
-        sys.exit(1)
-    
     # Create Jira client
     jira = get_jira_client(server, token, email, auth_type, login, verify_ssl, timeout)
     
@@ -427,10 +427,8 @@ def extract(server, token, project, query, max_results, output_path, preview, ve
         jql_query = query
     else:
         if not project:
-            project = config_data.get('extraction', {}).get('default_project', '')
-            if not project:
-                console.print("[bold red]Error:[/bold red] Either project or query must be provided.")
-                sys.exit(1)
+            console.print("[bold red]Error:[/bold red] Either project or query must be provided. Set a default project in your config file or specify with --project.")
+            sys.exit(1)
         jql_query = f"project = {project} ORDER BY updated DESC"
     
     console.print(f"[bold]Using JQL query:[/bold] {jql_query}")
