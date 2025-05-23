@@ -138,6 +138,8 @@ def fetch_issues(jira: JIRA, query: str, max_results: int = 1000) -> List[Dict[s
     Returns:
         List of issue dictionaries
     """
+    # Debug information about max_results
+    console.print(f"[dim]fetch_issues called with max_results={max_results}[/dim]")
     issues = []
     start_at = 0
     chunk_size = 50  # Reduced from 100 to improve reliability
@@ -159,7 +161,9 @@ def fetch_issues(jira: JIRA, query: str, max_results: int = 1000) -> List[Dict[s
             # First query to get total count
             initial_chunk = jira.search_issues(query, startAt=0, maxResults=1)
             if hasattr(initial_chunk, 'total'):
+                console.print(f"[dim]Total issues available in Jira: {initial_chunk.total}[/dim]")
                 total = min(max_results, initial_chunk.total)
+                console.print(f"[dim]Will fetch up to {total} issues (limited by max_results={max_results})[/dim]")
                 progress.update(task, total=total)
             
             while True:
@@ -392,7 +396,14 @@ def extract(server, token, project, query, max_results, output_path, preview, ve
     email = email or config_data.get('jira', {}).get('email', '')
     auth_type = auth_type or config_data.get('jira', {}).get('auth_type', 'basic')
     login = login or config_data.get('jira', {}).get('login', '')
-    max_results = max_results or config_data.get('extraction', {}).get('max_results', 1000)
+    
+    # Log the max_results from config for debugging
+    config_max_results = config_data.get('extraction', {}).get('max_results', 1000)
+    console.print(f"[dim]Config max_results: {config_max_results}[/dim]")
+    
+    max_results = max_results or config_max_results
+    console.print(f"[dim]Using max_results: {max_results}[/dim]")
+    
     preview = preview if preview is not None else config_data.get('display', {}).get('preview', True)
     verify_ssl = verify_ssl if verify_ssl is not None else config_data.get('jira', {}).get('verify_ssl', True)
     timeout = timeout or config_data.get('jira', {}).get('timeout', 30)
