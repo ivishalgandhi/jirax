@@ -28,7 +28,7 @@ import click
 import toml
 from jira import JIRA
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
 from rich.table import Table
 
 # Set up logging
