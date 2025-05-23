@@ -85,7 +85,7 @@ def update_nested_dict(d, u):
             d[k] = v
     return d
 
-def get_jira_client(server: str, token: str, email: str = None, auth_type: str = "basic", login: str = None) -> JIRA:
+def get_jira_client(server: str, token: str, email: str = None, auth_type: str = "basic", login: str = None, verify_ssl: bool = True) -> JIRA:
     """Create and return a JIRA client instance.
     
     Args:
@@ -94,7 +94,12 @@ def get_jira_client(server: str, token: str, email: str = None, auth_type: str =
         email: Email address (required for basic auth)
         auth_type: Authentication type ("basic" or "bearer")
         login: Username for bearer token authentication (if required)
+        verify_ssl: Whether to verify SSL certificates (disable for self-signed certs)
     """
+    # Suppress InsecureRequestWarning when verify_ssl is False
+    if not verify_ssl:
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     try:
         if auth_type.lower() == "bearer":
             if login:
@@ -102,18 +107,18 @@ def get_jira_client(server: str, token: str, email: str = None, auth_type: str =
                 # Some Jira instances require both login and token
                 # Use standard Authorization header approach
                 headers = {"Authorization": f"Bearer {token}"}
-                return JIRA(server=server, options={"headers": headers})
+                return JIRA(server=server, options={"headers": headers, "verify": verify_ssl})
             else:
                 console.print(f"[blue]Connecting to Jira with bearer token...[/blue]")
                 # Standard bearer token auth
-                return JIRA(server=server, token_auth=token)
+                return JIRA(server=server, token_auth=token, validate=verify_ssl)
         else:  # Default to basic auth
             # Use email from config or prompt if not available
             if not email:
                 email = click.prompt("Enter your Atlassian email address", type=str)
             
             console.print(f"[blue]Connecting to Jira as {email}...[/blue]")
-            return JIRA(server=server, basic_auth=(email, token))
+            return JIRA(server=server, basic_auth=(email, token), validate=verify_ssl)
     except Exception as e:
         console.print(f"[bold red]Error connecting to Jira:[/bold red] {str(e)}")
         sys.exit(1)
@@ -317,8 +322,9 @@ def cli():
 @click.option('-m', '--max-results', type=int, help='Maximum number of results to return')
 @click.option('-o', '--output-path', help='Output file path (with .csv extension)', default=None)
 @click.option('--preview/--no-preview', default=None, help='Preview results before export')
+@click.option('--verify-ssl/--no-verify-ssl', default=None, help='Verify SSL certificates (disable for self-signed certificates)')
 @click.option('-c', '--config', help='Path to config file')
-def extract(server, token, project, query, max_results, output_path, preview, config, email=None, auth_type=None, login=None):
+def extract(server, token, project, query, max_results, output_path, preview, verify_ssl, config, email=None, auth_type=None, login=None):
     """Extract Jira issues based on project or custom query.
 
     Examples:
@@ -356,6 +362,7 @@ def extract(server, token, project, query, max_results, output_path, preview, co
     login = login or config_data.get('jira', {}).get('login', '')
     max_results = max_results or config_data.get('extraction', {}).get('max_results', 1000)
     preview = preview if preview is not None else config_data.get('display', {}).get('preview', True)
+    verify_ssl = verify_ssl if verify_ssl is not None else config_data.get('jira', {}).get('verify_ssl', True)
     
     # Handle output path with configured directory
     if not output_path:
@@ -380,7 +387,7 @@ def extract(server, token, project, query, max_results, output_path, preview, co
         sys.exit(1)
     
     # Create Jira client
-    jira = get_jira_client(server, token, email, auth_type, login)
+    jira = get_jira_client(server, token, email, auth_type, login, verify_ssl)
     
     # Prepare JQL query
     if query:
@@ -503,22 +510,26 @@ def configure(global_):
     location = "global" if global_ else "local"
     console.print(f"[bold green]Configuration saved to {location} config file: {config_path}[/bold green]")
 
-@cli.command("list-projects")
+@cli.command('list-projects')
 @click.option('-s', '--server', help='Jira server URL')
 @click.option('-t', '--token', help='Jira Personal Access Token or Bearer token')
 @click.option('-e', '--email', help='Atlassian email address for authentication (basic auth)')
 @click.option('-a', '--auth-type', help='Authentication type: "basic" or "bearer"')
 @click.option('-l', '--login', help='Username for bearer token authentication (if required)')
+@click.option('--verify-ssl/--no-verify-ssl', default=None, help='Verify SSL certificates (disable for self-signed certificates)')
 @click.option('-c', '--config', help='Path to config file')
-def list_projects(server, token, email, config, auth_type=None, login=None):
+def list_projects_command(server, token, email, config, auth_type=None, login=None, verify_ssl=None):
     """List all available projects in your Jira instance.
     
     Examples:
-    
-    	# List all projects
-    	jirax list-projects
+        # List all projects using config file settings
+        jirax list-projects
+        
+        # List projects with SSL verification disabled (for self-signed certificates)
+        jirax list-projects --no-verify-ssl
     """
-    list_jira_projects(server, token, email, config)
+    from .list_projects import list_projects
+    list_projects(server, token, email, config, auth_type, login, verify_ssl)
 
 if __name__ == "__main__":
     cli()

@@ -6,6 +6,8 @@
 server = ""
 # Authentication type - either "basic" or "bearer"
 auth_type = "basic"
+# Whether to verify SSL certificates (set to false for self-signed certificates)
+verify_ssl = true
 
 # For Basic Authentication (default):
 # Your personal access token (PAT)
