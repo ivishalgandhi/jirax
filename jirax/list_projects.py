@@ -44,7 +44,7 @@ def get_jira_client(server, token, email=None, auth_type="basic", login=None):
         console.print(f"[bold red]Error connecting to Jira:[/bold red] {str(e)}")
         sys.exit(1)
 
-def list_projects(server=None, token=None, email=None, config_path=None, auth_type=None, login=None, verify_ssl=None):
+def list_projects(server=None, token=None, email=None, config_path=None, auth_type=None, login=None, verify_ssl=None, timeout=None):
     """List all available projects in Jira."""
     # Load config
     try:
@@ -63,6 +63,7 @@ def list_projects(server=None, token=None, email=None, config_path=None, auth_ty
         auth_type = auth_type or config.get('jira', {}).get('auth_type', 'basic')
         login = login or config.get('jira', {}).get('login', '')
         verify_ssl = verify_ssl if verify_ssl is not None else config.get('jira', {}).get('verify_ssl', True)
+        timeout = timeout or config.get('jira', {}).get('timeout', 30)
         
         if not server or not token:
             console.print("[bold red]Error:[/bold red] Missing configuration. Please ensure your config file has server and token configured.")
@@ -73,7 +74,7 @@ def list_projects(server=None, token=None, email=None, config_path=None, auth_ty
         sys.exit(1)
     
     # Connect to Jira
-    jira = get_jira_client(server, token, email, auth_type, login, verify_ssl)
+    jira = get_jira_client(server, token, email, auth_type, login, verify_ssl, timeout)
     
     # Get all projects
     try:

@@ -4,13 +4,15 @@ Jirax - A tool for extracting Jira issues to CSV format.
 """
 import os
 import sys
+import csv
 import json
-from datetime import datetime
+import pathlib
+import toml
+import time
 import logging
 import warnings
-from typing import List, Dict, Any, Optional
-import csv
-import pathlib
+from typing import List, Dict, Any, Optional, Union, Tuple
+from datetime import datetime
 
 # Import list_projects functionality
 from jirax.list_projects import list_projects as list_jira_projects
@@ -85,7 +87,7 @@ def update_nested_dict(d, u):
             d[k] = v
     return d
 
-def get_jira_client(server: str, token: str, email: str = None, auth_type: str = "basic", login: str = None, verify_ssl: bool = True) -> JIRA:
+def get_jira_client(server: str, token: str, email: str = None, auth_type: str = "basic", login: str = None, verify_ssl: bool = True, timeout: int = 30) -> JIRA:
     """Create and return a JIRA client instance.
     
     Args:
@@ -95,6 +97,7 @@ def get_jira_client(server: str, token: str, email: str = None, auth_type: str =
         auth_type: Authentication type ("basic" or "bearer")
         login: Username for bearer token authentication (if required)
         verify_ssl: Whether to verify SSL certificates (disable for self-signed certs)
+        timeout: Connection timeout in seconds
     """
     # Suppress InsecureRequestWarning when verify_ssl is False
     if not verify_ssl:
@@ -107,18 +110,18 @@ def get_jira_client(server: str, token: str, email: str = None, auth_type: str =
                 # Some Jira instances require both login and token
                 # Use standard Authorization header approach
                 headers = {"Authorization": f"Bearer {token}"}
-                return JIRA(server=server, options={"headers": headers, "verify": verify_ssl})
+                return JIRA(server=server, options={"headers": headers, "verify": verify_ssl, "timeout": timeout})
             else:
                 console.print(f"[blue]Connecting to Jira with bearer token...[/blue]")
                 # Standard bearer token auth
-                return JIRA(server=server, token_auth=token, validate=verify_ssl)
+                return JIRA(server=server, token_auth=token, validate=verify_ssl, timeout=timeout)
         else:  # Default to basic auth
             # Use email from config or prompt if not available
             if not email:
                 email = click.prompt("Enter your Atlassian email address", type=str)
             
             console.print(f"[blue]Connecting to Jira as {email}...[/blue]")
-            return JIRA(server=server, basic_auth=(email, token), validate=verify_ssl)
+            return JIRA(server=server, basic_auth=(email, token), validate=verify_ssl, timeout=timeout)
     except Exception as e:
         console.print(f"[bold red]Error connecting to Jira:[/bold red] {str(e)}")
         sys.exit(1)
@@ -135,34 +138,62 @@ def fetch_issues(jira: JIRA, query: str, max_results: int = 1000) -> List[Dict[s
     Returns:
         List of issue dictionaries
     """
+    issues = []
+    start_at = 0
+    chunk_size = 50  # Reduced from 100 to improve reliability
+    total = None
+    
+    # Create a progress bar that shows the actual progress
     with Progress(
-        SpinnerColumn(),
-        TextColumn("[bold blue]Fetching Jira issues..."),
-        transient=True,
+        "[progress.description]{task.description}",
+        BarColumn(),
+        "[progress.percentage]{task.percentage:>3.0f}%",
+        "•",
+        "[bold blue]{task.completed}/{task.total}",
+        "•",
+        TimeElapsedColumn(),
     ) as progress:
-        progress.add_task("fetch", total=None)
+        task = progress.add_task("[bold blue]Fetching Jira issues...", total=None)
         
         try:
-            issues = []
-            start_at = 0
-            chunk_size = 100  # Jira API usually limits to 100 per request
+            # First query to get total count
+            initial_chunk = jira.search_issues(query, startAt=0, maxResults=1)
+            if hasattr(initial_chunk, 'total'):
+                total = min(max_results, initial_chunk.total)
+                progress.update(task, total=total)
             
             while True:
-                chunk = jira.search_issues(query, startAt=start_at, maxResults=chunk_size, 
-                                         expand='changelog')
-                
-                if not chunk:
-                    break
+                try:
+                    console.print(f"[dim]Fetching issues {start_at} to {start_at + chunk_size}...[/dim]")
+                    chunk = jira.search_issues(query, startAt=start_at, maxResults=chunk_size, 
+                                             expand='changelog')
                     
-                issues.extend(chunk)
-                start_at += len(chunk)
-                
-                if len(chunk) < chunk_size or len(issues) >= max_results:
-                    break
+                    if not chunk:
+                        break
+                        
+                    chunk_length = len(chunk)
+                    issues.extend(chunk)
+                    start_at += chunk_length
+                    
+                    # Update progress
+                    progress.update(task, completed=min(len(issues), total or len(issues)))
+                    
+                    if chunk_length < chunk_size or len(issues) >= max_results:
+                        break
+                        
+                except Exception as e:
+                    console.print(f"[yellow]Warning: Error fetching chunk, retrying: {str(e)}[/yellow]")
+                    # Wait a bit before retrying
+                    time.sleep(2)
+                    continue
             
-            return issues
+            return issues[:max_results]  # Ensure we don't exceed max_results
+            
         except Exception as e:
             console.print(f"[bold red]Error fetching issues:[/bold red] {str(e)}")
+            if issues:  # Return any issues we've managed to fetch so far
+                console.print(f"[yellow]Returning {len(issues)} issues fetched before error occurred.[/yellow]")
+                return issues
             sys.exit(1)
 
 def extract_issue_data(issues: List, jira: JIRA) -> List[Dict[str, Any]]:
@@ -323,8 +354,9 @@ def cli():
 @click.option('-o', '--output-path', help='Output file path (with .csv extension)', default=None)
 @click.option('--preview/--no-preview', default=None, help='Preview results before export')
 @click.option('--verify-ssl/--no-verify-ssl', default=None, help='Verify SSL certificates (disable for self-signed certificates)')
+@click.option('--timeout', type=int, default=None, help='Connection timeout in seconds')
 @click.option('-c', '--config', help='Path to config file')
-def extract(server, token, project, query, max_results, output_path, preview, verify_ssl, config, email=None, auth_type=None, login=None):
+def extract(server, token, project, query, max_results, output_path, preview, verify_ssl, timeout, config, email=None, auth_type=None, login=None):
     """Extract Jira issues based on project or custom query.
 
     Examples:
@@ -363,6 +395,7 @@ def extract(server, token, project, query, max_results, output_path, preview, ve
     max_results = max_results or config_data.get('extraction', {}).get('max_results', 1000)
     preview = preview if preview is not None else config_data.get('display', {}).get('preview', True)
     verify_ssl = verify_ssl if verify_ssl is not None else config_data.get('jira', {}).get('verify_ssl', True)
+    timeout = timeout or config_data.get('jira', {}).get('timeout', 30)
     
     # Handle output path with configured directory
     if not output_path:
@@ -387,7 +420,7 @@ def extract(server, token, project, query, max_results, output_path, preview, ve
         sys.exit(1)
     
     # Create Jira client
-    jira = get_jira_client(server, token, email, auth_type, login, verify_ssl)
+    jira = get_jira_client(server, token, email, auth_type, login, verify_ssl, timeout)
     
     # Prepare JQL query
     if query:
@@ -517,8 +550,9 @@ def configure(global_):
 @click.option('-a', '--auth-type', help='Authentication type: "basic" or "bearer"')
 @click.option('-l', '--login', help='Username for bearer token authentication (if required)')
 @click.option('--verify-ssl/--no-verify-ssl', default=None, help='Verify SSL certificates (disable for self-signed certificates)')
+@click.option('--timeout', type=int, default=None, help='Connection timeout in seconds')
 @click.option('-c', '--config', help='Path to config file')
-def list_projects_command(server, token, email, config, auth_type=None, login=None, verify_ssl=None):
+def list_projects_command(server, token, email, config, auth_type=None, login=None, verify_ssl=None, timeout=None):
     """List all available projects in your Jira instance.
     
     Examples:
@@ -529,7 +563,7 @@ def list_projects_command(server, token, email, config, auth_type=None, login=No
         jirax list-projects --no-verify-ssl
     """
     from .list_projects import list_projects
-    list_projects(server, token, email, config, auth_type, login, verify_ssl)
+    list_projects(server, token, email, config, auth_type, login, verify_ssl, timeout)
 
 if __name__ == "__main__":
     cli()

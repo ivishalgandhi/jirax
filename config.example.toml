@@ -8,6 +8,8 @@ server = ""
 auth_type = "basic"
 # Whether to verify SSL certificates (set to false for self-signed certificates)
 verify_ssl = true
+# Connection timeout in seconds (increase for slow connections)
+timeout = 60
 
 # For Basic Authentication (default):
 # Your personal access token (PAT)
