@@ -7,6 +7,7 @@ A simple command-line tool for extracting Jira issues and exporting them to CSV 
 - Extract Jira issues using project keys or custom JQL queries
 - Export data to CSV format
 - Preview data before export
+- Supports both basic and bearer token authentication methods
 - Secure handling of authentication via TOML configuration files
 - Rich console output with progress indicators
 
@@ -74,8 +75,14 @@ You can also create or edit the TOML config file manually. Here's an example con
 
 [jira]
 server = "https://your-instance.atlassian.net"
+# Authentication type: "basic" (default) or "bearer" for Personal Access Tokens
+auth_type = "basic"
+# Your token (PAT for basic auth or Bearer token for bearer auth)
 token = "your-personal-access-token"
+# Email (required for basic auth)
 email = "your.email@example.com"
+# Login (only required for some Jira instances with bearer auth)
+# login = "your-jira-username"
 
 [extraction]
 # Default project to extract from if no project is specified
@@ -122,6 +129,32 @@ List all available projects in your Jira instance:
 jirax list-projects
 ```
 
+### Authentication Options
+
+Jirax supports two authentication methods:
+
+#### Basic Authentication
+
+Used with email and Personal Access Token (PAT):
+
+```bash
+jirax extract --email your.email@example.com --token your-pat --project PROJ
+```
+
+#### Bearer Token Authentication
+
+Used with a bearer token (some Jira instances require this):
+
+```bash
+jirax extract --auth-type bearer --token your-bearer-token --project PROJ
+```
+
+Some Jira instances also require a username with bearer authentication:
+
+```bash
+jirax extract --auth-type bearer --token your-bearer-token --login your-username --project PROJ
+```
+
 ### Advanced Options
 
 ```bash
@@ -131,8 +164,10 @@ jirax extract --help
 ```
 Options:
   -s, --server TEXT             Jira server URL
-  -t, --token TEXT              Jira Personal Access Token
-  -e, --email TEXT              Atlassian email address for authentication
+  -t, --token TEXT              Jira Personal Access Token or Bearer token
+  -e, --email TEXT              Atlassian email address for authentication (basic auth)
+  -a, --auth-type TEXT          Authentication type: "basic" or "bearer"
+  -l, --login TEXT              Username for bearer token authentication (if required)
   -p, --project TEXT            Jira project key
   -q, --query TEXT              Custom JQL query (overrides project if provided)
   -m, --max-results INTEGER     Maximum number of results to return
