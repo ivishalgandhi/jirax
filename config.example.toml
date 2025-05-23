@@ -4,10 +4,21 @@
 [jira]
 # Your Jira instance URL (e.g., https://your-company.atlassian.net)
 server = ""
+# Authentication type - either "basic" or "bearer"
+auth_type = "basic"
+
+# For Basic Authentication (default):
 # Your personal access token (PAT)
 token = ""
 # Your Atlassian email address
 email = ""
+
+# For Bearer Token Authentication:
+# Uncomment these and comment the above
+# auth_type = "bearer"
+# token = "your-bearer-token"
+# login = "your-jira-username"  # Only if your Jira instance requires a username with bearer token
+# email is not required for bearer auth
 
 [extraction]
 # Default project to extract from if no project is specified

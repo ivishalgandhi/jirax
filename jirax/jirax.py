@@ -18,6 +18,10 @@ from jirax.list_projects import list_projects as list_jira_projects
 # Suppress urllib3 warnings about LibreSSL
 warnings.filterwarnings("ignore", category=Warning, module="urllib3")
 
+# Disable all urllib3 warnings at the source
+import urllib3
+urllib3.disable_warnings()
+
 import click
 import toml
 from jira import JIRA
@@ -45,7 +49,7 @@ LOCAL_CONFIG_PATH = pathlib.Path("./config.toml")
 def load_config():
     """Load configuration from TOML file."""
     config = {
-        "jira": {"server": "", "token": "", "email": ""},
+        "jira": {"server": "", "token": "", "email": "", "auth_type": "basic", "login": ""},
         "extraction": {
             "default_project": "",
             "max_results": 1000,
@@ -81,15 +85,35 @@ def update_nested_dict(d, u):
             d[k] = v
     return d
 
-def get_jira_client(server: str, token: str, email: str = None) -> JIRA:
-    """Create and return a JIRA client instance."""
+def get_jira_client(server: str, token: str, email: str = None, auth_type: str = "basic", login: str = None) -> JIRA:
+    """Create and return a JIRA client instance.
+    
+    Args:
+        server: Jira server URL
+        token: Personal Access Token or Bearer token
+        email: Email address (required for basic auth)
+        auth_type: Authentication type ("basic" or "bearer")
+        login: Username for bearer token authentication (if required)
+    """
     try:
-        # Use email from config or prompt if not available
-        if not email:
-            email = click.prompt("Enter your Atlassian email address", type=str)
-        
-        console.print(f"[blue]Connecting to Jira as {email}...[/blue]")
-        return JIRA(server=server, basic_auth=(email, token))
+        if auth_type.lower() == "bearer":
+            if login:
+                console.print(f"[blue]Connecting to Jira as {login} with bearer token...[/blue]")
+                # Some Jira instances require both login and token
+                # Use standard Authorization header approach
+                headers = {"Authorization": f"Bearer {token}"}
+                return JIRA(server=server, options={"headers": headers})
+            else:
+                console.print(f"[blue]Connecting to Jira with bearer token...[/blue]")
+                # Standard bearer token auth
+                return JIRA(server=server, token_auth=token)
+        else:  # Default to basic auth
+            # Use email from config or prompt if not available
+            if not email:
+                email = click.prompt("Enter your Atlassian email address", type=str)
+            
+            console.print(f"[blue]Connecting to Jira as {email}...[/blue]")
+            return JIRA(server=server, basic_auth=(email, token))
     except Exception as e:
         console.print(f"[bold red]Error connecting to Jira:[/bold red] {str(e)}")
         sys.exit(1)
@@ -238,7 +262,8 @@ def display_preview(data: List[Dict[str, Any]], num_rows: int = 5) -> None:
         console.print("[bold yellow]No data to display.[/bold yellow]")
         return
     
-    table = Table(show_header=True, header_style="bold magenta")
+    # Create table with line separators for better readability
+    table = Table(show_header=True, header_style="bold magenta", show_lines=True)
     
     # Get all field names
     field_names = set()
@@ -283,16 +308,17 @@ def cli():
 
 @cli.command()
 @click.option('-s', '--server', help='Jira server URL')
-@click.option('-t', '--token', help='Jira Personal Access Token')
-@click.option('-e', '--email', help='Atlassian email address for authentication')
+@click.option('-t', '--token', help='Jira Personal Access Token or Bearer token')
+@click.option('-e', '--email', help='Atlassian email address for authentication (basic auth)')
+@click.option('-a', '--auth-type', help='Authentication type: "basic" or "bearer"')
+@click.option('-l', '--login', help='Username for bearer token authentication (if required)')
 @click.option('-p', '--project', help='Jira project key')
 @click.option('-q', '--query', help='Custom JQL query (overrides project if provided)')
 @click.option('-m', '--max-results', type=int, help='Maximum number of results to return')
-@click.option('-o', '--output-path', help='Output file path (with .csv extension)', 
-              default=lambda: f"jira_extract_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+@click.option('-o', '--output-path', help='Output file path (with .csv extension)', default=None)
 @click.option('--preview/--no-preview', default=None, help='Preview results before export')
 @click.option('-c', '--config', help='Path to config file')
-def extract(server, token, project, query, max_results, output_path, preview, config, email=None):
+def extract(server, token, project, query, max_results, output_path, preview, config, email=None, auth_type=None, login=None):
     """Extract Jira issues based on project or custom query.
 
     Examples:
@@ -326,8 +352,19 @@ def extract(server, token, project, query, max_results, output_path, preview, co
     server = server or config_data.get('jira', {}).get('server', '')
     token = token or config_data.get('jira', {}).get('token', '')
     email = email or config_data.get('jira', {}).get('email', '')
+    auth_type = auth_type or config_data.get('jira', {}).get('auth_type', 'basic')
+    login = login or config_data.get('jira', {}).get('login', '')
     max_results = max_results or config_data.get('extraction', {}).get('max_results', 1000)
     preview = preview if preview is not None else config_data.get('display', {}).get('preview', True)
+    
+    # Handle output path with configured directory
+    if not output_path:
+        output_dir = config_data.get('extraction', {}).get('output_directory', './exports')
+        # Ensure output directory exists
+        os.makedirs(output_dir, exist_ok=True)
+        # Generate filename with timestamp
+        filename = f"jira_extract_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        output_path = os.path.join(output_dir, filename)
     
     # Validate inputs
     if not server:
@@ -343,7 +380,7 @@ def extract(server, token, project, query, max_results, output_path, preview, co
         sys.exit(1)
     
     # Create Jira client
-    jira = get_jira_client(server, token, email)
+    jira = get_jira_client(server, token, email, auth_type, login)
     
     # Prepare JQL query
     if query:
@@ -412,13 +449,28 @@ def configure(global_):
     server = click.prompt("Enter Jira server URL", 
                          default=config.get('jira', {}).get('server', ''),
                          type=str)
-    token = click.prompt("Enter Jira Personal Access Token", 
+    
+    auth_type = click.prompt("Authentication type",
+                            default=config.get('jira', {}).get('auth_type', 'basic'),
+                            type=click.Choice(['basic', 'bearer'], case_sensitive=False))
+    
+    token = click.prompt("Enter Jira " + ("Personal Access Token" if auth_type.lower() == "basic" else "Bearer Token"), 
                         default=config.get('jira', {}).get('token', ''),
                         hide_input=True,
                         type=str)
-    email = click.prompt("Enter your Atlassian email address", 
-                        default=config.get('jira', {}).get('email', ''),
-                        type=str)
+    
+    email = ""
+    login = ""
+    
+    if auth_type.lower() == "basic":
+        email = click.prompt("Enter your Atlassian email address", 
+                            default=config.get('jira', {}).get('email', ''),
+                            type=str)
+    else:  # Bearer token authentication
+        login = click.prompt("Enter your Jira username (if required for bearer auth, otherwise leave empty)",
+                           default=config.get('jira', {}).get('login', ''),
+                           type=str,
+                           show_default=True)
     
     # Get additional settings
     default_project = click.prompt("Default project (optional)", 
@@ -432,7 +484,9 @@ def configure(global_):
     # Update config
     config['jira']['server'] = server
     config['jira']['token'] = token
+    config['jira']['auth_type'] = auth_type.lower()
     config['jira']['email'] = email
+    config['jira']['login'] = login
     config['extraction']['default_project'] = default_project
     config['extraction']['max_results'] = max_results
     
@@ -451,10 +505,12 @@ def configure(global_):
 
 @cli.command("list-projects")
 @click.option('-s', '--server', help='Jira server URL')
-@click.option('-t', '--token', help='Jira Personal Access Token')
-@click.option('-e', '--email', help='Atlassian email address for authentication')
+@click.option('-t', '--token', help='Jira Personal Access Token or Bearer token')
+@click.option('-e', '--email', help='Atlassian email address for authentication (basic auth)')
+@click.option('-a', '--auth-type', help='Authentication type: "basic" or "bearer"')
+@click.option('-l', '--login', help='Username for bearer token authentication (if required)')
 @click.option('-c', '--config', help='Path to config file')
-def list_projects(server, token, email, config):
+def list_projects(server, token, email, config, auth_type=None, login=None):
     """List all available projects in your Jira instance.
     
     Examples:

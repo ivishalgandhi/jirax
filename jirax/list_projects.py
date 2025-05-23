@@ -3,23 +3,48 @@
 Module to list all available projects in your Jira instance.
 """
 import sys
+import warnings
 import toml
+
+# Suppress urllib3 warnings about LibreSSL
+warnings.filterwarnings("ignore", category=Warning, module="urllib3")
+
+# Disable all urllib3 warnings at the source
+import urllib3
+urllib3.disable_warnings()
+
 from jira import JIRA
 from rich.console import Console
 from rich.table import Table
 
 console = Console()
 
-def get_jira_client(server, token, email):
+def get_jira_client(server, token, email=None, auth_type="basic", login=None):
     """Create and return a JIRA client instance."""
     try:
-        console.print(f"[blue]Connecting to Jira as {email}...[/blue]")
-        return JIRA(server=server, basic_auth=(email, token))
+        if auth_type.lower() == "bearer":
+            if login:
+                console.print(f"[blue]Connecting to Jira as {login} with bearer token...[/blue]")
+                # Some Jira instances require both login and token
+                # Use standard Authorization header approach
+                headers = {"Authorization": f"Bearer {token}"}
+                return JIRA(server=server, options={"headers": headers})
+            else:
+                console.print(f"[blue]Connecting to Jira with bearer token...[/blue]")
+                # Standard bearer token auth
+                return JIRA(server=server, token_auth=token)
+        else:  # Default to basic auth
+            if not email:
+                console.print(f"[bold red]Error:[/bold red] Email is required for basic authentication.")
+                sys.exit(1)
+                
+            console.print(f"[blue]Connecting to Jira as {email}...[/blue]")
+            return JIRA(server=server, basic_auth=(email, token))
     except Exception as e:
         console.print(f"[bold red]Error connecting to Jira:[/bold red] {str(e)}")
         sys.exit(1)
 
-def list_projects(server=None, token=None, email=None, config_path=None):
+def list_projects(server=None, token=None, email=None, config_path=None, auth_type=None, login=None):
     """List all available projects in Jira."""
     # Load config
     try:
@@ -35,6 +60,8 @@ def list_projects(server=None, token=None, email=None, config_path=None):
         server = server or config.get('jira', {}).get('server', '')
         token = token or config.get('jira', {}).get('token', '')
         email = email or config.get('jira', {}).get('email', '')
+        auth_type = auth_type or config.get('jira', {}).get('auth_type', 'basic')
+        login = login or config.get('jira', {}).get('login', '')
         
         if not server or not token:
             console.print("[bold red]Error:[/bold red] Missing configuration. Please ensure your config file has server and token configured.")
@@ -45,7 +72,7 @@ def list_projects(server=None, token=None, email=None, config_path=None):
         sys.exit(1)
     
     # Connect to Jira
-    jira = get_jira_client(server, token, email)
+    jira = get_jira_client(server, token, email, auth_type, login)
     
     # Get all projects
     try:
