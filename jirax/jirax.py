@@ -12,6 +12,9 @@ from typing import List, Dict, Any, Optional
 import csv
 import pathlib
 
+# Import list_projects functionality
+from jirax.list_projects import list_projects as list_jira_projects
+
 # Suppress urllib3 warnings about LibreSSL
 warnings.filterwarnings("ignore", category=Warning, module="urllib3")
 
@@ -445,6 +448,21 @@ def configure(global_):
     
     location = "global" if global_ else "local"
     console.print(f"[bold green]Configuration saved to {location} config file: {config_path}[/bold green]")
+
+@cli.command("list-projects")
+@click.option('-s', '--server', help='Jira server URL')
+@click.option('-t', '--token', help='Jira Personal Access Token')
+@click.option('-e', '--email', help='Atlassian email address for authentication')
+@click.option('-c', '--config', help='Path to config file')
+def list_projects(server, token, email, config):
+    """List all available projects in your Jira instance.
+    
+    Examples:
+    
+    	# List all projects
+    	jirax list-projects
+    """
+    list_jira_projects(server, token, email, config)
 
 if __name__ == "__main__":
     cli()

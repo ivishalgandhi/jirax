@@ -21,22 +21,24 @@ A simple command-line tool for extracting Jira issues and exporting them to CSV 
 pip install -e .
 
 # OR install directly from GitHub
-pip install git+https://github.com/yourusername/jirax.git
+pip install git+https://github.com/ivishalgandhi/jirax.git
 ```
 
 ## Project Structure
 
 ```
 jirax/
-├── jirax/              # Package directory
-│   ├── __init__.py    # Package initialization
-│   ├── __main__.py    # Module entry point
-│   └── jirax.py       # Main functionality
-├── jirax.py           # Development script
-├── test_jirax.py      # Test script
-├── config.example.toml # Example configuration
-├── pyproject.toml     # Project metadata and dependencies
-└── README.md          # This file
+├── jirax/                  # Package directory
+│   ├── __init__.py        # Package initialization
+│   ├── __main__.py        # Module entry point
+│   ├── jirax.py           # Main functionality
+│   └── list_projects.py   # Project listing utility
+├── tests/                 # Test directory
+│   └── test_jirax.py      # Test script
+├── jirax.py               # Development script
+├── config.example.toml    # Example configuration
+├── pyproject.toml         # Project metadata and dependencies
+└── README.md              # This file
 ```
 
 ## Configuration
@@ -92,6 +94,14 @@ preview_rows = 5
 
 ## Usage
 
+### Available Commands
+
+Jirax provides the following commands:
+
+- `extract` - Extract Jira issues to CSV
+- `configure` - Set up your Jira connection details
+- `list-projects` - View all available projects in your Jira instance
+
 ### Basic Usage
 
 Extract issues from a project:
@@ -104,6 +114,12 @@ Use a custom JQL query:
 
 ```bash
 jirax extract --query "project = PROJ AND status = 'In Progress'"
+```
+
+List all available projects in your Jira instance:
+
+```bash
+jirax list-projects
 ```
 
 ### Advanced Options
@@ -188,7 +204,7 @@ You can easily identify the issue type in your exported data:
 The project includes a comprehensive test suite that validates functionality with various query scenarios:
 
 ```bash
-./test_jirax.py
+./tests/test_jirax.py
 ```
 
 This will run tests for:
