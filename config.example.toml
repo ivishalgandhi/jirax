@@ -42,17 +42,19 @@ preview_rows = 5
 # Column names for CSV export
 # These are the column names that will be used when exporting issues to CSV
 # You can customize these to change the column headers in your exported CSV file
+Sprint = "Sprint"
 Key = "Key"
-Summary = "Summary"
 Issue_Type = "Issue Type"
-Status = "Status"
 Priority = "Priority"
+Summary = "Summary"
+Epic_Name = "Epic Name"
 Assignee = "Assignee"
-Reporter = "Reporter"
+Pair = "Pair"
+Status = "Status"
+Labels = "Labels"
 Resolution = "Resolution"
 Updated = "Updated"
-Sprint = "Sprint"
 Epic_Key = "Epic Key"
-Epic_Name = "Epic Name"
-Labels = "Labels"
 Extract_Date = "Extract Date"
+Reporter = "Reporter"
+
