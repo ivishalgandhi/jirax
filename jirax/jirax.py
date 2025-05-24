@@ -299,23 +299,66 @@ def extract_issue_data(issues: List, jira: JIRA, config=None) -> List[Dict[str, 
         
         return data
 
-def export_to_csv(data: List[Dict[str, Any]], output_path: str) -> None:
-    """Export data to CSV file."""
+def export_to_csv(data: List[Dict[str, Any]], output_path: str, config=None) -> None:
+    """Export data to CSV file.
+    
+    Args:
+        data: List of dictionaries containing issue data
+        output_path: Path to the output CSV file
+        config: Configuration dictionary containing column definitions and order
+    """
     if not data:
         console.print("[bold yellow]No data to export.[/bold yellow]")
         return
+    
+    if config is None:
+        config = load_config()
+    
+    # Get column definitions from config to determine order
+    columns_config = config.get("columns", {})
+    
+    # If columns are defined in config, use that order
+    if columns_config:
+        # Get ordered field names from config, preserving the defined order
+        ordered_fields = list(columns_config.keys())
         
-    # Get all unique field names from the data
-    fieldnames = set()
-    for item in data:
-        fieldnames.update(item.keys())
+        # Get any additional fields from data that aren't in config
+        all_fields = set()
+        for item in data:
+            all_fields.update(item.keys())
+        
+        # Add any fields not in config at the end
+        for field in sorted(all_fields):
+            if field not in ordered_fields:
+                ordered_fields.append(field)
+        
+        # Ensure Extract_Date is the last column if present
+        extract_date_field = None
+        for field in ordered_fields:
+            if field.lower() == "extract_date":
+                extract_date_field = field
+                break
+        
+        if extract_date_field:
+            ordered_fields.remove(extract_date_field)
+            ordered_fields.append(extract_date_field)
+        
+        fieldnames = ordered_fields
+    else:
+        # Default behavior if no columns are defined in config
+        fieldnames = set()
+        for item in data:
+            fieldnames.update(item.keys())
+        
+        # Convert to list and ensure Extract_Date is the last column
+        fieldnames = sorted(list(fieldnames))
+        for field in fieldnames:
+            if field.lower() == "extract_date":
+                fieldnames.remove(field)
+                fieldnames.append(field)
+                break
     
-    # Convert to list and ensure Extract_Date is the last column
-    fieldnames = sorted(list(fieldnames))
-    if 'Extract_Date' in fieldnames:
-        fieldnames.remove('Extract_Date')
-        fieldnames.append('Extract_Date')
-    
+    # Export to CSV
     with open(output_path, 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames, quoting=csv.QUOTE_NONNUMERIC)
         writer.writeheader()
@@ -323,22 +366,51 @@ def export_to_csv(data: List[Dict[str, Any]], output_path: str) -> None:
     
     console.print(f"[bold green]Data exported to CSV:[/bold green] {output_path}")
 
-def display_preview(data: List[Dict[str, Any]], num_rows: int = 5) -> None:
-    """Display a preview of the data in a rich table."""
+def display_preview(data: List[Dict[str, Any]], num_rows: int = 5, config=None) -> None:
+    """Display a preview of the data in a rich table.
+    
+    Args:
+        data: List of dictionaries containing issue data
+        num_rows: Number of rows to preview
+        config: Configuration dictionary containing column definitions and order
+    """
     if not data:
         console.print("[bold yellow]No data to display.[/bold yellow]")
         return
     
+    if config is None:
+        config = load_config()
+        
     # Create table with line separators for better readability
     table = Table(show_header=True, header_style="bold magenta", show_lines=True)
     
-    # Get all field names
-    field_names = set()
-    for item in data:
-        field_names.update(item.keys())
-    field_names = sorted(list(field_names))
+    # Get column definitions from config to determine order
+    columns_config = config.get("columns", {})
     
-    # Add columns
+    # Determine field names and order
+    if columns_config:
+        # Use the order from config
+        ordered_fields = list(columns_config.keys())
+        
+        # Get any additional fields from data that aren't in config
+        all_fields = set()
+        for item in data:
+            all_fields.update(item.keys())
+        
+        # Add any fields not in config at the end
+        for field in sorted(all_fields):
+            if field not in ordered_fields:
+                ordered_fields.append(field)
+                
+        field_names = ordered_fields
+    else:
+        # Default behavior if no columns defined in config
+        field_names = set()
+        for item in data:
+            field_names.update(item.keys())
+        field_names = sorted(list(field_names))
+    
+    # Add columns to table
     for column in field_names:
         table.add_column(column)
     
@@ -479,13 +551,13 @@ def extract(server, token, project, query, max_results, output_path, preview, ve
     # Preview data if requested
     if preview:
         preview_rows = config_data.get('display', {}).get('preview_rows', 5)
-        display_preview(data, preview_rows)
+        display_preview(data, preview_rows, config_data)
         
         if not click.confirm("Continue with export?", default=True):
             sys.exit(0)
     
     # Export data to CSV
-    export_to_csv(data, output_path)
+    export_to_csv(data, output_path, config_data)
     
     console.print("[bold green]Export completed successfully![/bold green]")
 
