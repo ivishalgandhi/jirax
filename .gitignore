@@ -65,6 +65,7 @@ ENV/
 
 # Project specific
 config.toml
+config.oldauth.toml
 jira_extract_*.csv
 test_results/
 *.db
