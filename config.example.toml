@@ -37,3 +37,22 @@ output_directory = "./exports"
 preview = true
 # Number of rows to show in preview
 preview_rows = 5
+
+[columns]
+# Column names for CSV export
+# These are the column names that will be used when exporting issues to CSV
+# You can customize these to change the column headers in your exported CSV file
+Key = "Key"
+Summary = "Summary"
+Issue_Type = "Issue Type"
+Status = "Status"
+Priority = "Priority"
+Assignee = "Assignee"
+Reporter = "Reporter"
+Resolution = "Resolution"
+Updated = "Updated"
+Sprint = "Sprint"
+Epic_Key = "Epic Key"
+Epic_Name = "Epic Name"
+Labels = "Labels"
+Extract_Date = "Extract Date"

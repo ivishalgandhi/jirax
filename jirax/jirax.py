@@ -57,7 +57,23 @@ def load_config():
             "max_results": 1000,
             "output_directory": "./exports"
         },
-        "display": {"preview": True, "preview_rows": 5}
+        "display": {"preview": True, "preview_rows": 5},
+        "columns": {
+            "Key": "Key",
+            "Summary": "Summary",
+            "Issue_Type": "Issue Type",
+            "Status": "Status",
+            "Priority": "Priority",
+            "Assignee": "Assignee",
+            "Reporter": "Reporter",
+            "Resolution": "Resolution",
+            "Updated": "Updated",
+            "Sprint": "Sprint",
+            "Epic_Key": "Epic Key",
+            "Epic_Name": "Epic Name",
+            "Labels": "Labels",
+            "Extract_Date": "Extract Date"
+        }
     }
     
     # Check local config first
@@ -196,17 +212,24 @@ def fetch_issues(jira: JIRA, query: str, max_results: int = 1000) -> List[Dict[s
                 return issues
             sys.exit(1)
 
-def extract_issue_data(issues: List, jira: JIRA) -> List[Dict[str, Any]]:
+def extract_issue_data(issues: List, jira: JIRA, config=None) -> List[Dict[str, Any]]:
     """
     Extract relevant fields from Jira issues.
     
     Args:
         issues: List of Jira issue objects
         jira: JIRA client instance
+        config: Configuration dictionary containing column definitions
         
     Returns:
         List of dictionaries containing extracted issue data
     """
+    if config is None:
+        config = load_config()
+    
+    # Get column definitions from config
+    columns = config.get("columns", {})
+    
     with Progress(
         SpinnerColumn(),
         TextColumn("[bold blue]Extracting issue data..."),
@@ -246,23 +269,31 @@ def extract_issue_data(issues: List, jira: JIRA) -> List[Dict[str, Any]]:
             # Extract labels
             labels = ", ".join(issue.fields.labels) if hasattr(issue.fields, 'labels') and issue.fields.labels else None
             
-            # Basic issue data
-            issue_data = {
-                'Key': issue.key,
-                'Summary': issue.fields.summary,
-                'Issue_Type': getattr(issue.fields.issuetype, 'name', None) if hasattr(issue.fields, 'issuetype') and issue.fields.issuetype else None,
-                'Status': getattr(issue.fields.status, 'name', None),
-                'Priority': getattr(issue.fields.priority, 'name', None) if hasattr(issue.fields, 'priority') and issue.fields.priority else None,
-                'Assignee': getattr(issue.fields.assignee, 'displayName', None) if hasattr(issue.fields, 'assignee') and issue.fields.assignee else None,
-                'Reporter': getattr(issue.fields.reporter, 'displayName', None) if hasattr(issue.fields, 'reporter') and issue.fields.reporter else None,
-                'Resolution': getattr(issue.fields.resolution, 'name', None) if hasattr(issue.fields, 'resolution') and issue.fields.resolution else None,
-                'Updated': issue.fields.updated if hasattr(issue.fields, 'updated') else None,
-                'Sprint': sprint,
-                'Epic_Key': epic_key,
-                'Epic_Name': epic_name,
-                'Labels': labels,
-                'Extract_Date': run_date
+            # Basic issue data using column names from config
+            issue_data = {}
+            
+            # Map fields to their configured column names
+            field_mappings = {
+                "Key": issue.key,
+                "Summary": issue.fields.summary,
+                "Issue_Type": getattr(issue.fields.issuetype, 'name', None) if hasattr(issue.fields, 'issuetype') and issue.fields.issuetype else None,
+                "Status": getattr(issue.fields.status, 'name', None),
+                "Priority": getattr(issue.fields.priority, 'name', None) if hasattr(issue.fields, 'priority') and issue.fields.priority else None,
+                "Assignee": getattr(issue.fields.assignee, 'displayName', None) if hasattr(issue.fields, 'assignee') and issue.fields.assignee else None,
+                "Reporter": getattr(issue.fields.reporter, 'displayName', None) if hasattr(issue.fields, 'reporter') and issue.fields.reporter else None,
+                "Resolution": getattr(issue.fields.resolution, 'name', None) if hasattr(issue.fields, 'resolution') and issue.fields.resolution else None,
+                "Updated": issue.fields.updated if hasattr(issue.fields, 'updated') else None,
+                "Sprint": sprint,
+                "Epic_Key": epic_key,
+                "Epic_Name": epic_name,
+                "Labels": labels,
+                "Extract_Date": run_date
             }
+            
+            # Create the issue data dictionary using configured column names
+            for field_key, field_value in field_mappings.items():
+                column_name = columns.get(field_key, field_key)
+                issue_data[column_name] = field_value
             
             data.append(issue_data)
         
@@ -443,7 +474,7 @@ def extract(server, token, project, query, max_results, output_path, preview, ve
     console.print(f"[bold green]Found {len(issues)} issues.[/bold green]")
     
     # Extract data
-    data = extract_issue_data(issues, jira)
+    data = extract_issue_data(issues, jira, config_data)
     
     # Preview data if requested
     if preview:
@@ -482,6 +513,8 @@ def configure(global_):
         config['extraction'] = {}
     if 'display' not in config:
         config['display'] = {}
+    if 'columns' not in config:
+        config['columns'] = {}
     
     # Get Jira connection details
     server = click.prompt("Enter Jira server URL", 
