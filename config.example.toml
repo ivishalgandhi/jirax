@@ -58,3 +58,20 @@ Epic_Key = "Epic Key"
 Extract_Date = "Extract Date"
 Reporter = "Reporter"
 
+[fields_setup]
+Sprint            = { display_name = "Sprint", source = "_computed.sprint" }
+IssueType         = { display_name = "Issue Type", source = "fields.issuetype.name" }
+EpicName          = { display_name = "Epic Name", source = "_computed.epicname" } # This is the Summary/Name of the Epic issue
+Assignee          = { display_name = "Assignee", source = "fields.assignee.displayName" }
+Priority          = { display_name = "Priority", source = "fields.priority.name" }
+IssueSummary      = { display_name = "Summary", source = "fields.summary" }
+Status            = { display_name = "Status", source = "fields.status.name" }
+Resolution        = { display_name = "Resolution", source = "fields.resolution.name" }
+Reporter          = { display_name = "Reporter", source = "fields.reporter.displayName" }
+CreatedDate       = { display_name = "Created", source = "fields.created" }
+UpdatedDate       = { display_name = "Updated", source = "fields.updated" }
+ResolvedDate      = { display_name = "Resolved", source = "fields.resolutiondate" }
+Labels            = { display_name = "Labels", source = "_computed.labels" }
+EpicLink          = { display_name = "Epic Link", source = "_computed.epickey" } # This is the Key of the Epic issue
+IssueKey          = { display_name = "Key", source = "key" }
+ExtractDate       = { display_name = "Extract Date", source = "_computed.extractdate" }
